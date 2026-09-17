@@ -1,0 +1,78 @@
+name: Build Aseprite macOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install Skia
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          skia_url=$(source "$GITHUB_WORKSPACE/laf/misc/skia-url.sh" | xargs)
+          skia_file=$(basename "$skia_url")
+
+          echo "Downloading $skia_file"
+          curl -L --fail --retry 3 -o "$skia_file" "$skia_url"
+
+          unzip -q "$skia_file" -d skia
+
+      - name: Install Ninja
+        uses: aseprite/get-ninja@main
+
+      - name: Enable ccache
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          key: macos-arm64-release
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 \
+            -DENABLE_TESTS=OFF \
+            -DENABLE_SCRIPTING=ON \
+            -DENABLE_CCACHE=ON \
+            -DLAF_BACKEND=skia \
+            -DSKIA_DIR="$GITHUB_WORKSPACE/skia" \
+            -DSKIA_LIBRARY_DIR="$GITHUB_WORKSPACE/skia/out/Release-arm64"
+
+      - name: Build
+        run: |
+          cmake --build build --parallel
+
+      - name: Verify
+        run: |
+          file build/bin/aseprite
+          ls -lah build/bin
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifact
+          ditto build/bin/aseprite.app artifact/Aseprite.app
+
+          cd artifact
+          zip -r ../Aseprite-macOS-arm64.zip Aseprite.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aseprite-macOS-arm64
+          path: Aseprite-macOS-arm64.zip
+          if-no-files-found: error
