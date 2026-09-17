@@ -19,13 +19,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          skia_url=$(source "$GITHUB_WORKSPACE/laf/misc/skia-url.sh" | xargs)
-          skia_file=$(basename "$skia_url")
-
-          echo "Downloading $skia_file"
-          curl -L --fail --retry 3 -o "$skia_file" "$skia_url"
-
-          unzip -q "$skia_file" -d skia
+          this_dir="${{ github.workspace }}"
+          skia_url=$(source $this_dir/laf/misc/skia-url.sh | xargs)
+          skia_file=$(basename $skia_url)
+          curl --ssl-revoke-best-effort -L -o "$skia_file" "$skia_url"
+          unzip "$skia_file" -d skia
 
       - name: Install Ninja
         uses: aseprite/get-ninja@main
